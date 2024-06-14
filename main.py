@@ -13,7 +13,6 @@ from supabase import create_client, Client
 # Create a FastAPI app
 app = FastAPI()
 
-
 # Function to clone a Git repository
 def clone_repo(repo_url, clone_dir):
     if not os.path.exists(clone_dir):
@@ -35,6 +34,7 @@ def clone_repo(repo_url, clone_dir):
 def count_lines(file_path):
     try:
         with open(file_path, "rb") as file:
+            #TODO: Call GPT to identify not handled errors
             raw_data = file.read()
             result = chardet.detect(raw_data)
             encoding = result["encoding"]
@@ -45,13 +45,20 @@ def count_lines(file_path):
         print(f"Error reading {file_path}: {e}")
         return 0
 
-
 # Function to process the repository and collect data
 def process_repo(clone_dir):
     data = []
     for root, _, files in os.walk(clone_dir):
+        # files_paths = [os.path.join(root, file) for file in files]
+        # identify_project_type(files_paths)
+        #TODO: Project: Python
+        #TODO: Important extension: .py
+        #TODO: Analysis of .py files
+        #TODO: File sensible: main.py
         for file in files:
             file_path = os.path.join(root, file)
+            if ('.git' in file_path):
+                continue
             line_count = count_lines(file_path)
             data.append((file_path, line_count))
     return data
@@ -74,7 +81,6 @@ def store_data_in_db(db_name, data):
     conn.commit()
     conn.close()
 
-
 # Main function
 def main(git_url: str):
     clone_dir = "cloned_repo"
@@ -85,13 +91,15 @@ def main(git_url: str):
 
     # Step 2: Process the repository to count files and lines
     data = process_repo(clone_dir)
+    lines_count = 0
+    for file in data:
+        lines_count += file[1]
 
     # Step 3: Store the data in a SQLite database
     store_data_in_db(db_name, data)
 
-    print(f"Processed {len(data)} files. Data stored in {db_name}.")
+    print(f"Processed {len(data)} files, representing {lines_count} lines. Data stored in {db_name}.")
     return data
-
 
 @app.get("/")
 def read_root(git_url: str, background_tasks: BackgroundTasks):
@@ -99,6 +107,5 @@ def read_root(git_url: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(main, git_url)
     return {"message": "Processing repository in the background"}
 
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")
