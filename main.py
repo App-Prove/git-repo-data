@@ -29,7 +29,6 @@ def clone_repo(repo_url, clone_dir):
     # Clone the repository
     Repo.clone_from(repo_url, clone_dir)
 
-
 # Function to count lines in a file
 def count_lines(file_path):
     try:
@@ -62,7 +61,6 @@ def process_repo(clone_dir):
             line_count = count_lines(file_path)
             data.append((file_path, line_count))
     return data
-
 
 # Function to store data in a SQLite database
 def store_data_in_db(db_name, data):
