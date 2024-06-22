@@ -5,7 +5,8 @@ from git import Repo
 from fastapi import FastAPI, BackgroundTasks
 import uvicorn
 from pathlib import Path
-from analysis.files_analyser import get_important_extensions
+from analysis.files_analyser import get_important_extensions,get_file_analysis
+
 
 import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,36 +27,24 @@ def clone_repo(repo_url, clone_dir):
             logger.info(f"Removing file {file}")
             os.remove(os.path.join(root, file))
         for dir in dirs:
-
             print(f"Removing dir /{dir}")
             os.rmdir(os.path.join(root, dir))
     # Clone the repository
     Repo.clone_from(repo_url, clone_dir)
 
-def count_lines(file_path):
-    try:
-        with open(file_path, "rb") as file:
-            #TODO: Call GPT to identify not handled errors
-            raw_data = file.read()
-            result = chardet.detect(raw_data)
-            encoding = result["encoding"]
-            text = raw_data.decode(str(encoding))
-            lines = text.splitlines()
-            return len(lines)
-    except Exception as e:
-        logger.error(f"Error reading {file_path}: {e}")
-        return 0
 
 def process_repo(clone_dir : str | Path):
-    data = []
     if type(clone_dir) == str:
         clone_dir = Path(clone_dir)
     list_files = list(clone_dir.rglob("*.*"))
     selected_file,project_type = get_important_extensions(list_files)
-    
-
-
-    return data
+    list_response = []
+    for response in get_file_analysis(selected_file):
+        try:
+            list_response.append(response.choices[0].message.content)
+        except:
+            pass
+    return list_response
 
 def store_data_in_db(db_name, data):
     conn = sqlite3.connect(db_name)
@@ -82,10 +71,6 @@ def main(git_url: str):
 
     # Step 2: Process the repository to count files and lines
     data = process_repo(clone_dir)
-    lines_count = 0
-    for file in data:
-        lines_count += file[1]
-
     # Step 3: Store the data in a SQLite database
     store_data_in_db(db_name, data)
 
