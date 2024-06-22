@@ -6,7 +6,7 @@ from fastapi import FastAPI, BackgroundTasks
 import uvicorn
 from pathlib import Path
 from analysis.files_analyser import get_important_extensions,get_file_analysis
-
+from typing import Tuple,List
 
 import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -33,18 +33,23 @@ def clone_repo(repo_url, clone_dir):
     Repo.clone_from(repo_url, clone_dir)
 
 
-def process_repo(clone_dir : str | Path):
+def process_repo(clone_dir : str | Path) -> Tuple[List[str],int]:
+    
     if type(clone_dir) == str:
         clone_dir = Path(clone_dir)
     list_files = list(clone_dir.rglob("*.*"))
-    selected_file,project_type = get_important_extensions(list_files)
+
+    selected_extensions,_project_type = get_important_extensions(list_files)
+    selected_files = filter(lambda x : x.suffix in selected_extensions,list_files)
     list_response = []
-    for response in get_file_analysis(selected_file):
+    total_line_count = 0
+    for response,line_count in get_file_analysis(selected_files):
         try:
             list_response.append(response.choices[0].message.content)
+            total_line_count += line_count
         except:
             pass
-    return list_response
+    return list_response,total_line_count
 
 def store_data_in_db(db_name, data):
     conn = sqlite3.connect(db_name)
@@ -65,16 +70,14 @@ def store_data_in_db(db_name, data):
 def main(git_url: str):
     clone_dir = "cloned_repo"
     db_name = "file_data.db"
-
     # Step 1: Clone the repository
     clone_repo(git_url, clone_dir)
-
     # Step 2: Process the repository to count files and lines
-    data = process_repo(clone_dir)
+    data,total_line_count = process_repo(clone_dir)
     # Step 3: Store the data in a SQLite database
     store_data_in_db(db_name, data)
 
-    logger.info(f"Processed {len(data)} files, representing {lines_count} lines. Data stored in {db_name}.")
+    logger.info(f"Processed {len(data)} files, representing {total_line_count} lines. Data stored in {db_name}.")
     return data
 
 @app.get("/")

@@ -1,31 +1,22 @@
-import requests
-from abc import ABC, abstractmethod
-import yaml
-import json
 import os
 import logging
 from openai import OpenAI
+from typing import List
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
-
-
-    
-
-
 class ChatGPTApi:
     """Class that is used to call chatgpt, you need to have your openai API key as an environemnt variable named OPENAI_API_KEY"""
     def __init__(self) -> None:
-        assert os.getenv("OPENAI_API_KEY") is not None , "No API key detected, please setup your API key as an environement variable under the name OPENAI_API_KEY"
+        assert os.getenv("OPENAI_API_KEY") is not None ,"No API key detected, please setup your API key as an environement variable under the name OPENAI_API_KEY"
         self.client = OpenAI()
         self.message = [
             {"role": "system", "content": "You are a helpful assistant that is an expert at detecting mistakes in code."}
             ]
 
 
-    def call(self, model="gpt-3.5", code=None, max_tokens=100, temperature=0.7, n=1, stop=None):
+    def call(self, code=None):
         if code is None or code == "":
             return None
         message = self.message
@@ -38,3 +29,7 @@ class ChatGPTApi:
         )
         return response
         # return response.choices[0].message.content
+
+    def call_on_list(self,code_list : List[str]):
+        for code in code_list:
+            yield self.call(code)
