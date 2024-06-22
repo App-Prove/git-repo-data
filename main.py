@@ -4,23 +4,26 @@ import chardet
 from git import Repo
 from fastapi import FastAPI, BackgroundTasks
 import uvicorn
-from supabase import create_client, Client
+from pathlib import Path
+from analysis.files_analyser import get_important_extensions
+
+import logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 #url: str = os.environ.get("SUPABASE_URL")
 #key: str = os.environ.get("SUPABASE_KEY")
 #supabase: Client = create_client(url, key)
 
-# Create a FastAPI app
 app = FastAPI()
 
-# Function to clone a Git repository
 def clone_repo(repo_url, clone_dir):
     if not os.path.exists(clone_dir):
         os.makedirs(clone_dir)
     # Remove all files in the directory
     for root, dirs, files in os.walk(clone_dir, topdown=False, followlinks=True):
         for file in files:
-            print(f"Removing file {file}")
+            logger.info(f"Removing file {file}")
             os.remove(os.path.join(root, file))
         for dir in dirs:
 
@@ -29,8 +32,6 @@ def clone_repo(repo_url, clone_dir):
     # Clone the repository
     Repo.clone_from(repo_url, clone_dir)
 
-
-# Function to count lines in a file
 def count_lines(file_path):
     try:
         with open(file_path, "rb") as file:
@@ -42,29 +43,20 @@ def count_lines(file_path):
             lines = text.splitlines()
             return len(lines)
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+        logger.error(f"Error reading {file_path}: {e}")
         return 0
 
-# Function to process the repository and collect data
-def process_repo(clone_dir):
+def process_repo(clone_dir : str | Path):
     data = []
-    for root, _, files in os.walk(clone_dir):
-        # files_paths = [os.path.join(root, file) for file in files]
-        # identify_project_type(files_paths)
-        #TODO: Project: Python
-        #TODO: Important extension: .py
-        #TODO: Analysis of .py files
-        #TODO: File sensible: main.py
-        for file in files:
-            file_path = os.path.join(root, file)
-            if ('.git' in file_path):
-                continue
-            line_count = count_lines(file_path)
-            data.append((file_path, line_count))
+    if type(clone_dir) == str:
+        clone_dir = Path(clone_dir)
+    list_files = list(clone_dir.rglob("*.*"))
+    selected_file,project_type = get_important_extensions(list_files)
+    
+
+
     return data
 
-
-# Function to store data in a SQLite database
 def store_data_in_db(db_name, data):
     conn = sqlite3.connect(db_name)
     cursor = conn.cursor()
@@ -81,7 +73,6 @@ def store_data_in_db(db_name, data):
     conn.commit()
     conn.close()
 
-# Main function
 def main(git_url: str):
     clone_dir = "cloned_repo"
     db_name = "file_data.db"
@@ -98,12 +89,12 @@ def main(git_url: str):
     # Step 3: Store the data in a SQLite database
     store_data_in_db(db_name, data)
 
-    print(f"Processed {len(data)} files, representing {lines_count} lines. Data stored in {db_name}.")
+    logger.info(f"Processed {len(data)} files, representing {lines_count} lines. Data stored in {db_name}.")
     return data
 
 @app.get("/")
 def read_root(git_url: str, background_tasks: BackgroundTasks):
-    print("Processing repository...")
+    logger.info("Processing repository...")
     background_tasks.add_task(main, git_url)
     return {"message": "Processing repository in the background"}
 
