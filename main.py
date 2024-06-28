@@ -5,10 +5,12 @@ from git import Repo
 from fastapi import FastAPI, BackgroundTasks
 import uvicorn
 from supabase import create_client, Client
+from dotenv import load_dotenv
 
-#url: str = os.environ.get("SUPABASE_URL")
-#key: str = os.environ.get("SUPABASE_KEY")
-#supabase: Client = create_client(url, key)
+load_dotenv()
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 
 # Create a FastAPI app
 app = FastAPI()
@@ -27,7 +29,7 @@ def clone_repo(repo_url, clone_dir):
             print(f"Removing dir /{dir}")
             os.rmdir(os.path.join(root, dir))
     # Clone the repository
-    Repo.clone_from(repo_url, clone_dir)
+    Repo.clone_from(f"https://github.com/{repo_url}", clone_dir)
 
 # Function to count lines in a file
 def count_lines(file_path):
@@ -63,21 +65,14 @@ def process_repo(clone_dir):
     return data
 
 # Function to store data in a SQLite database
-def store_data_in_db(db_name, data):
-    conn = sqlite3.connect(db_name)
-    cursor = conn.cursor()
-    cursor.execute(
-        """CREATE TABLE IF NOT EXISTS file_data
-                      (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                       file_path TEXT, 
-                       line_count INTEGER)"""
-    )
-
-    cursor.executemany(
-        "INSERT INTO file_data (file_path, line_count) VALUES (?, ?)", data
-    )
-    conn.commit()
-    conn.close()
+def store_data_in_db(*,url:str,files_count: int,lines_count: int):  
+    response = (
+    supabase.table("offers")
+    .update({"files_count": files_count, "lines_count": lines_count})
+    .eq("url", url)
+    .execute()
+)
+    print(response)
 
 # Main function
 def main(git_url: str):
@@ -92,9 +87,9 @@ def main(git_url: str):
     lines_count = 0
     for file in data:
         lines_count += file[1]
-
+    files_count = len(data)
     # Step 3: Store the data in a SQLite database
-    store_data_in_db(db_name, data)
+    store_data_in_db(url=git_url,files_count=files_count,lines_count=lines_count)
 
     print(f"Processed {len(data)} files, representing {lines_count} lines. Data stored in {db_name}.")
     return data
