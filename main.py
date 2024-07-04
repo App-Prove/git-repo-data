@@ -5,7 +5,7 @@ from git import Repo
 from fastapi import FastAPI, BackgroundTasks
 import uvicorn
 from pathlib import Path
-from analysis.files_analyser import get_important_extensions,get_file_analysis
+from analysis.files_analyser import get_important_programming_language,get_file_analysis
 from typing import Tuple,List
 
 import logging
@@ -24,32 +24,53 @@ def clone_repo(repo_url, clone_dir):
     # Remove all files in the directory
     for root, dirs, files in os.walk(clone_dir, topdown=False, followlinks=True):
         for file in files:
-            logger.info(f"Removing file {file}")
+            logger.debug(f"Removing file {file}")
             os.remove(os.path.join(root, file))
         for dir in dirs:
-            print(f"Removing dir /{dir}")
+            logger.debug(f"Removing dir {dir}")
             os.rmdir(os.path.join(root, dir))
     # Clone the repository
     Repo.clone_from(repo_url, clone_dir)
 
 
-def process_repo(clone_dir : str | Path) -> Tuple[List[str],int]:
+def process_repo(clone_dir : str | Path) -> Tuple[int, int, List[str], List[str]]:
+    """Analyse the repository
     
+    - Get the list of files
+    - Count number of files
+    - Count number of lines
+    - Identify most common extensions
+    - Filter files with selected extensions
+    - Analyse each file with GPT to locate sensitive code
+    
+    returns number_of_files, total_line_count, most_common_programming_languages, code_which_may_throw_error
+    """
     if type(clone_dir) == str:
         clone_dir = Path(clone_dir)
     list_files = list(clone_dir.rglob("*.*"))
+    number_of_files = len(list_files)
 
-    selected_extensions,_project_type = get_important_extensions(list_files)
-    selected_files = filter(lambda x : x.suffix in selected_extensions,list_files)
+    important_programming_language = get_important_programming_language(list_files)
+    list_of_important_extensions = important_programming_language['extension'].to_list()
+    list_of_programming_languages = important_programming_language['name'].to_list()
+    logger.debug(f"Selected extensions : {list_of_important_extensions}")
+    # Filter files with selected extensions
+    selected_files = list(filter(lambda x : x.suffix in list_of_important_extensions,list_files))
+    # Ensure relevent files are selected using AI
+    # selected_files = get_relevent_files(selected_files)
+    logger.debug(f"Selected files : {selected_files}")
+    # Change list to dict with filepath and programming language as keys
+    ready_for_analysis = [{"path":str(file),"language":important_programming_language[important_programming_language['extension'] == file.suffix]['name'].values[0]} for file in selected_files]
     list_response = []
     total_line_count = 0
-    for response,line_count in get_file_analysis(selected_files):
+    for response,line_count in get_file_analysis(ready_for_analysis):
+        logger.debug('Analyzing file')
         try:
             list_response.append(response.choices[0].message.content)
             total_line_count += line_count
-        except:
-            pass
-    return list_response,total_line_count
+        except Exception as error:
+            logger.error(f"An error has occured line 70 : {error}")
+    return number_of_files,total_line_count,list_of_programming_languages,list_response
 
 def store_data_in_db(db_name, data):
     conn = sqlite3.connect(db_name)
@@ -73,12 +94,16 @@ def main(git_url: str):
     # Step 1: Clone the repository
     clone_repo(git_url, clone_dir)
     # Step 2: Process the repository to count files and lines
-    data,total_line_count = process_repo(clone_dir)
+    number_of_files,total_line_count,list_of_programming_languages,list_response = process_repo(clone_dir)
+    logger.debug(f"Number of files : {number_of_files}")
+    logger.debug(f"Total line count : {total_line_count}")
+    logger.debug(f"Most common programming languages : {list_of_programming_languages}")
+    logger.debug(f"Code which may throw error : {list_response}")
     # Step 3: Store the data in a SQLite database
-    store_data_in_db(db_name, data)
+    # store_data_in_db(db_name, data)
 
-    logger.info(f"Processed {len(data)} files, representing {total_line_count} lines. Data stored in {db_name}.")
-    return data
+    # logger.info(f"Processed {len(data)} files, representing {total_line_count} lines. Data stored in {db_name}.")
+    return
 
 @app.get("/")
 def read_root(git_url: str, background_tasks: BackgroundTasks):

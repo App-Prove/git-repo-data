@@ -3,3 +3,4 @@ cloned_repo
 __pycache__
 test.ipynb
 .ipynb_checkpoints
+*.env

@@ -5,41 +5,63 @@ import pandas as pd
 from analysis.ML_analyser import ChatGPTApi
 
 import logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
 config_path = "analysis/config/supported_extensions.csv"
 
-def get_important_extensions(list_files : List[Path] , extensions = []) -> List[str]:
 
-    if not extensions:
-        suffix_counts = Counter(map(lambda x : x.suffix ,list_files))
-        most_common_suffix_list = suffix_counts.most_common()
-        idx = 0
-        df = pd.read_csv(config_path)
-        while df[df['extension'] == most_common_suffix_list[idx][0]].shape[0] <= 0 and idx < len(most_common_suffix_list):
-            idx +=1
-        if idx >= len(most_common_suffix_list):
-            return []
-        most_common_suffix, _ = most_common_suffix_list[idx]
-        language = df[df['extension'] == most_common_suffix].iloc[0]['name']
-        return df[df['name'] == language]['extension'].to_list(),language
-    else:
-        liste = []
-        for suffix in extensions:
-            language = df[df['extension'] == suffix].iloc[0]['name']
-            liste += df[df['name'] == language]['extension'].to_list()
-        return list(set(map(lambda x : Path(x),liste))),language
+def get_important_programming_language(list_files: List[Path]) -> pd.DataFrame:
+    """Returns common extensions for the detected programming language"""
+    logger.debug("No extensions detected")
+    suffix_counts = Counter(map(lambda x: x.suffix, list_files))
+    most_common_suffix_list = suffix_counts.most_common()
+    logger.debug(f"Most common suffixes : {most_common_suffix_list}")
+    df = pd.read_csv(config_path)
+    # Find extensions which are in the list of supported extensions
+    # Count number of file for each extension
+    df["count"] = df["extension"].apply(
+        lambda x: suffix_counts[x] if x in suffix_counts else 0
+    )
+    df = df.sort_values(by="count", ascending=False)
+    # Remove extensions that are not in the list of supported extensions
+    df = df[df["count"] > 0]
+    logger.debug(df)
+    return df
 
-def get_file_analysis(list_files : List[Path]):
+
+def get_file_analysis(list_files: List[dict]):
+    """Asynchronously analyse each file with GPT to locate sensitive code
+    
+    We have to ensure we lead an analysis on relevent files (files that are likely to contain sensitive code)
+    """
+    logger.debug("Loading GPT Model")
     model = ChatGPTApi()
-    for file in list_files:
+    logger.debug("Model loaded")
+    for file_data in list_files:
+        file_path = file_data.get("path")
         try:
-            with open(file,'r') as f:
-                content = map(lambda x : f"{x[0]} " + x[1],enumerate(f.readlines()))
+            check = input(f"Type Y to analyse file else N : {file_path}")
+            if check.lower() != "n":
+                raise Exception("User skipped file")
+            with open(file_path, "r") as file:
+                logger.debug(f"Reading file : {file_path}")
+                # Put line numbers before each line
+                content = list(
+                    map(
+                        lambda line: f"{line[0]}. {line[1]}" if line[1] != "" else None,
+                        enumerate(file.readlines(), 1),
+                    )
+                )
+                logger.debug(f"Content : {content}")
                 code = "".join(content)
-                yield model.call(code) , len(content)
-        except:
-            logger.error(f"An error has occured for file : {file}")
-            yield None,None
+                logger.debug(f"Code : {code}")
+                yield model.call(code, file_data.get("language")), len(content)
+        except Exception as error:
+            logger.error(f"An error has occured for file : {file_path} : {error}")
+            yield None, None
+    logger.debug("All files analysed")
