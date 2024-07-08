@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, BackgroundTasks
 import uvicorn
 from utils import analysis
-from ws import pipeline
+from routers import ws
 from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s', filename='app.log', filemode='w')
@@ -22,7 +22,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(pipeline.router)
+app.include_router(ws.repositories.router)
 
 
 def main(git_url: str):

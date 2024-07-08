@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import pandas as pd
@@ -42,28 +43,40 @@ def get_important_programming_language(list_files: List[Path]) -> pd.DataFrame:
     return df
 
 
-def get_relevent_files(list_files: List[dict]):
-    """Identify relevent files using GPT"""
+def get_sensitive_files(list_files: List[dict]) -> dict:
+    """Identify sensitive files using GPT
+    
+    return list of files {"path": str, "language": str}
+    """
     logger.debug("Loading GPT Model")
     logger.debug("Model loaded")
-    relevent_files = model.identify_relevent_files(list_files)
+    sensitive_files = model.identify_sensitive_files(list_files)
+    try:
+        # Try to format the data in json
+        sensitive_files = json.loads(sensitive_files)
+    except Exception as error:
+        logger.error(f"When identifying sensitive files an error has occured (likely GPT forgetting sensitive_files key) : {error}")
+        return []
     logger.debug("All files analysed")
-    return relevent_files
+    return sensitive_files
 
 
-def get_in_depth_file_analysis(list_files: List[dict]):
+def get_in_depth_file_analysis(list_files: List[List[dict]]):
     """Asynchronously analyse each file with GPT to locate sensitive code
+    For each file it returns a list of issues which are dict with keys:
+    - lineNumber
+    - comment
+    - suggestion
 
     We have to ensure we lead an analysis on relevent files (files that are likely to contain sensitive code)
     """
     in_depth_results = []
+    # Limit the number of files to 5 for testing
+    list_files = list_files[:5]
     for file_data in list_files:
         logger.error(file_data)
         file_path = file_data.get("path")
         try:
-            check = input(f"Type Y to analyse file else N : {file_path}")
-            if check.lower() == "n":
-                raise Exception("User skipped file")
             with open(file_path, "r") as file:
                 logger.info(f"Reading file : {file_path}")
                 # Put line numbers before each line so GPT can understand the context
@@ -73,18 +86,36 @@ def get_in_depth_file_analysis(list_files: List[dict]):
                         enumerate(file.readlines(), 1),
                     )
                 )
-                logger.info(f"Content : {content}")
                 code = "".join(content)
+                logger.info(f"Code to analyze : {code}")
                 in_depth_result = model.in_depth_analysis(
                     code, file_data.get("language")
                 )
+                try:
+                    # Try to format the data in json
+                    in_depth_result = json.loads(in_depth_result)
+                    # We should get something like {"issues":[]}
+                except Exception as error:
+                    logger.error(f"When identifying in depth file analysis an error has occured (likely GPT forgetting issues key) : {error}")
+                    continue # Goes to next file
                 logger.warning(f"Sensitive code found in file : {file_path}")
                 logger.warning(in_depth_result)
-                in_depth_results.append(in_depth_result)
+                in_depth_result["path"] = file_path
+                in_depth_results.append(in_depth_result) # Add the analysis to the list
         except Exception as error:
             logger.error(f"An error has occured for file : {file_path} : {error}")
     return in_depth_results
 
+
+def format_github_url(url: str) -> str:
+    """Format the URL to be used with the Github API"""
+    # Make sure there is github.com in the URL
+    if "github.com" not in url:
+        url = f"github.com/{url}"
+    # Make sure there is https:// in the URL
+    if "https://" not in url:
+        url = f"https://{url}"
+    return url
 
 def clone_repo(repo_url, clone_dir):
     if not os.path.exists(clone_dir):

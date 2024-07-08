@@ -7,7 +7,7 @@ The goal is to update the client frontend based on websocket messages created by
 import json
 from pathlib import Path
 from fastapi import APIRouter, WebSocket, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from utils import analysis
 from utils.databases import store_data_in_db
@@ -21,7 +21,7 @@ CLONE_DIR: Path = "cloned_repo"
 DB_NAME: str = "file_data.db"
 
 router = APIRouter(
-    prefix="/repositories",
+    prefix="/stream/repositories",
     tags=["repositories"],
     # dependencies=[Depends(get_token_header)],
     # responses={404: {"description": "Not found"}},
@@ -43,20 +43,52 @@ html = """
         <ul id='messages'>
         </ul>
         <script>
-              var ws = new WebSocket("ws://localhost:8000/repositories/ws/repository_url");
-                ws.onmessage = function(event) {
-                    var messages = document.getElementById('messages')
-                    var message = document.createElement('li')
-                    var content = document.createTextNode(event.data)
-                    message.appendChild(content)
-                    messages.appendChild(message)
-                };
-                function sendMessage(event) {
-                    var input = document.getElementById("messageText")
-                    ws.send(input.value)
-                    input.value = ''
-                    event.preventDefault()
-                }
+            var ws = new WebSocket("ws://localhost:8000/repositories/ws/repository_url");
+            ws.onmessage = function(event) {
+                var messages = document.getElementById('messages')
+                var message = document.createElement('li')
+                var content = document.createTextNode(event.data)
+                message.appendChild(content)
+                messages.appendChild(message)
+            };
+            function sendMessage(event) {
+                var input = document.getElementById("messageText")
+                ws.send(input.value)
+                input.value = ''
+                event.preventDefault()
+            }
+
+
+// Create EventSource for SSE endpoint
+const eventSource = new EventSource('http://127.0.0.1:8000/stream/repositories/analysis/');
+
+eventSource.onopen = () => {
+    console.log('EventSource connected')
+    //Everytime the connection gets extablished clearing the previous data from UI
+    coordinatesElement.innerText = ''
+}
+
+//eventSource can have event listeners based on the type of event.
+//Bydefault for message type of event it have the onmessage method which can be used directly or this same can be achieved through explicit eventlisteners
+eventSource.addEventListener('locationUpdate', function (event) {
+    coords = JSON.parse(event.data);
+    console.log('LocationUpdate', coords);
+    updateCoordinates(coords)
+});
+
+//In case of any error, if eventSource is not closed explicitely then client will retry the connection a new call to backend will happen and the cycle will go on.
+eventSource.onerror = (error) => {
+    console.error('EventSource failed', error)
+    eventSource.close()
+}
+
+// Function to update and display coordinates
+function updateCoordinates(coordinates) {
+    // Create a new paragraph element for each coordinate and append it
+    const paragraph = document.createElement('p');
+    paragraph.textContent = `Latitude: ${coordinates.lat}, Longitude: ${coordinates.lng}`;
+    coordinatesElement.appendChild(paragraph);
+}
 
         </script>
     </body>
@@ -77,20 +109,17 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_text(f"Message text was: {data}")
 
 
-@router.websocket("/ws/repository_url")
-async def ws_repository_analysis(websocket: WebSocket):
+@router.get("/analysis/{repository_url}")
+async def ws_repository_analysis(repository_url: str):
     """
     Websocket endpoint for analysing a repository.
     Submit data in realtime to the client, in order to update frontend.
     """
-    await websocket.accept()
-    # We should create a queue and start processes in threads to avoid blocking the event loop
-    while True:
-        repository_url = await websocket.receive_text()
-        await websocket.send_text(f"Connected to repository: {repository_url}")
+    def repository_analysis():
+        yield f"Connected to repository: {repository_url}"
 
         # Step 1: Clone the repository
-        await websocket.send_text(f"Cloning repository: {repository_url}")
+        yield f"Cloning repository: {repository_url}"
         analysis.clone_repo(repository_url, CLONE_DIR)
         # Step 2: Process the repository to count files, lines, identify main languages
         simple_repo_analysis = analysis.get_simple_repository_analysis(CLONE_DIR)
@@ -105,24 +134,24 @@ async def ws_repository_analysis(websocket: WebSocket):
         logger.debug(f"Total line count : {total_line_count}")
         logger.debug(f"Most common programming languages : {list_of_programming_languages}")
         # > Send data to the client
-        await websocket.send_json(
+        yield json.dumps(
             {
                 "number_of_files": number_of_files,
                 "total_line_count": total_line_count,
                 "most_common_programming_languages": list_of_programming_languages,
-            }
-        )
+            })
+        
 
-        await websocket.send_text(str(ready_for_analysis))
+        yield str(ready_for_analysis)
         # Step 3: Identify sensitive code (filter unnecessary files with AI)
         relevent_files = analysis.get_relevent_files(ready_for_analysis)
-        await websocket.send_text(str(relevent_files))
+        yield str(relevent_files)
 
         logger.debug(f"Files identified as relevent : {relevent_files}")
 
         # Step 4: Identify changes in the code (check for security issues with AI, and suggest first solutions)
         in_depth_file_analysis = analysis.get_in_depth_file_analysis(json.loads(relevent_files).get("sensitive_files"))
-        await websocket.send_text(str(in_depth_file_analysis))
+        yield str(in_depth_file_analysis)
 
         logger.debug(f"Changes in code : {in_depth_file_analysis}")
 
@@ -132,3 +161,4 @@ async def ws_repository_analysis(websocket: WebSocket):
         # )
 
         # logger.info(f"Processed {len(data)} files, representing {total_line_count} lines. Data stored in {db_name}.")
+    return StreamingResponse(repository_analysis(), media_type="text/event-stream")
