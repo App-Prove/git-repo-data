@@ -5,16 +5,16 @@ from supabase import Client, create_client
 
 logger = logging.getLogger(__name__)
 
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
+url: str = os.environ.get("SUPABASE_URL",'')
+key: str = os.environ.get("SUPABASE_KEY",'')
 
-assert url is not None, "No SUPABASE_URL detected"
-assert key is not None, "No SUPABASE_KEY detected"
+assert url is not '', "No SUPABASE_URL detected"
+assert key is not '', "No SUPABASE_KEY detected"
 
 supabase: Client = create_client(url, key)
 
 
-def store_data_in_db(db_name: str, data: dict):
+def store_data_in_sqlite_db(db_name: str, data: dict):
     conn = sqlite3.connect(db_name)
     cursor = conn.cursor()
     cursor.execute(

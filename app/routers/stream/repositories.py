@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CLONE_DIR: Path = "cloned_repo"
+CLONE_DIR: Path = Path("cloned_repo")
 DB_NAME: str = "file_data.db"
 
 router = APIRouter(
@@ -144,13 +144,13 @@ async def ws_repository_analysis(repository_url: str):
 
         yield str(ready_for_analysis)
         # Step 3: Identify sensitive code (filter unnecessary files with AI)
-        relevent_files = analysis.get_relevent_files(ready_for_analysis)
-        yield str(relevent_files)
+        sensitive_files = analysis.get_sensitive_files(ready_for_analysis)
+        yield str(sensitive_files)
 
-        logger.debug(f"Files identified as relevent : {relevent_files}")
+        logger.debug(f"Files identified as sensitive : {sensitive_files}")
 
         # Step 4: Identify changes in the code (check for security issues with AI, and suggest first solutions)
-        in_depth_file_analysis = analysis.get_in_depth_file_analysis(json.loads(relevent_files).get("sensitive_files"))
+        in_depth_file_analysis = analysis.get_in_depth_file_analysis(sensitive_files.get("sensitive_files", []))
         yield str(in_depth_file_analysis)
 
         logger.debug(f"Changes in code : {in_depth_file_analysis}")

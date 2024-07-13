@@ -23,7 +23,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CLONE_DIR: Path = "cloned_repo"
+CLONE_DIR: Path = Path("cloned_repo")
 DB_NAME: str = "file_data.db"
 
 router = APIRouter(
@@ -35,7 +35,7 @@ router = APIRouter(
 from dotenv import load_dotenv
 
 load_dotenv()
-JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET",'')
 
 
 html = """
@@ -194,7 +194,7 @@ async def ws_repository_analysis(websocket: WebSocket):
         logger.debug(f"Files identified as relevent : {sensitive_files}")
 
         # Step 4: Identify changes in the code (check for security issues with AI, and suggest first solutions)
-        in_depth_file_analysis = analysis.get_in_depth_file_analysis(sensitive_files.get("sensitiveFiles"))
+        in_depth_file_analysis = analysis.get_in_depth_file_analysis(sensitive_files.get("sensitiveFiles",[]))
         await websocket_api.send_success(
                 message="In depth analysis finished",
                 type="inDepthAnalysis",

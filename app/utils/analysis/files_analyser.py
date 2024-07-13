@@ -5,7 +5,7 @@ import pandas as pd
 import chardet
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from collections import Counter
 from .ml import ChatGPTApi
 from git import Repo
@@ -43,25 +43,25 @@ def get_important_programming_language(list_files: List[Path]) -> pd.DataFrame:
     return df
 
 
-def get_sensitive_files(list_files: List[dict]) -> dict:
+def get_sensitive_files(list_files: List[dict[str,str]]) -> dict[str, List[dict[str, str]]]:
     """Identify sensitive files using GPT
     
-    return list of files {"path": str, "language": str}
+    return list of files {sensitiveFiles:[{"path": str, "language": str},]}
     """
     logger.debug("Loading GPT Model")
     logger.debug("Model loaded")
     sensitive_files = model.identify_sensitive_files(list_files)
     try:
         # Try to format the data in json
-        sensitive_files = json.loads(sensitive_files)
+        sensitive_files = json.loads(str(sensitive_files))
+        logger.debug("All files analysed")
+        return sensitive_files
     except Exception as error:
         logger.error(f"When identifying sensitive files an error has occured (likely GPT forgetting sensitive_files key) : {error}")
-        return []
-    logger.debug("All files analysed")
-    return sensitive_files
+        return {"sensitiveFiles": []}
 
 
-def get_in_depth_file_analysis(list_files: List[List[dict]]):
+def get_in_depth_file_analysis(list_files: List[dict[str,str]]) -> List[dict[str, str]]:
     """Asynchronously analyse each file with GPT to locate sensitive code
     For each file it returns a list of issues which are dict with keys:
     - lineNumber
@@ -75,7 +75,7 @@ def get_in_depth_file_analysis(list_files: List[List[dict]]):
     list_files = list_files[:5]
     for file_data in list_files:
         logger.error(file_data)
-        file_path = file_data.get("path")
+        file_path = str(file_data.get("path"))
         try:
             with open(file_path, "r") as file:
                 logger.info(f"Reading file : {file_path}")
@@ -86,10 +86,10 @@ def get_in_depth_file_analysis(list_files: List[List[dict]]):
                         enumerate(file.readlines(), 1),
                     )
                 )
-                code = "".join(content)
+                code = "".join([line for line in content if line is not None])
                 logger.info(f"Code to analyze : {code}")
                 in_depth_result = model.in_depth_analysis(
-                    code, file_data.get("language")
+                    code, str(file_data.get("language"))
                 )
                 try:
                     # Try to format the data in json
@@ -149,7 +149,7 @@ def count_lines(file_path):
 
 
 def get_simple_repository_analysis(
-    clone_dir: str | Path,
+    clone_dir: Path,
 ) -> Tuple[int, int, List[str], List[dict]]:
     """Analyse the repository
 
