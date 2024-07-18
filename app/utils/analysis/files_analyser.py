@@ -121,6 +121,13 @@ def clone_repo(repo_url, clone_dir):
     if not os.path.exists(clone_dir):
         os.makedirs(clone_dir)
     # Remove all files in the directory
+    clean_dir(clone_dir)
+    # Clone the repository
+    Repo.clone_from(repo_url, clone_dir)
+
+
+def clean_dir(clone_dir):
+    # Remove all files in the directory
     for root, dirs, files in os.walk(clone_dir, topdown=False, followlinks=True):
         for file in files:
             logger.debug(f"Removing file {file}")
@@ -128,8 +135,6 @@ def clone_repo(repo_url, clone_dir):
         for dir in dirs:
             logger.debug(f"Removing dir {dir}")
             os.rmdir(os.path.join(root, dir))
-    # Clone the repository
-    Repo.clone_from(repo_url, clone_dir)
 
 
 # Function to count lines in a file

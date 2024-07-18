@@ -146,6 +146,7 @@ async def ws_repository_analysis(websocket: WebSocket):
 
         # Step 1: Clone the repository
         await websocket_api.send_pending(message= "Started cloning repository")
+        CLONE_DIR = Path(repository_url.split("/")[-1])
         try:
             analysis.clone_repo(repository_url, CLONE_DIR)
         except Exception as error:
@@ -209,6 +210,9 @@ async def ws_repository_analysis(websocket: WebSocket):
         )
 
         logger.debug(f"Changes in code : {in_depth_file_analysis}")
+
+        # Remove the cloned repository
+        analysis.clean_dir(CLONE_DIR)
 
         await websocket.close()
         # Step 3: Store the data in a SQLite database
