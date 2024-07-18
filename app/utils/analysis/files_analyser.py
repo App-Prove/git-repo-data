@@ -135,7 +135,7 @@ def clean_dir(clone_dir):
         for dir in dirs:
             logger.debug(f"Removing dir {dir}")
             os.rmdir(os.path.join(root, dir))
-        os.rmdir(root)
+    os.rmdir(clone_dir)
 
 
 # Function to count lines in a file
