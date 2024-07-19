@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 url: str = os.environ.get("SUPABASE_URL",'')
 key: str = os.environ.get("SUPABASE_KEY",'')
 
-assert url is not '', "No SUPABASE_URL detected"
-assert key is not '', "No SUPABASE_KEY detected"
+assert url != '', "No SUPABASE_URL detected"
+assert key != '', "No SUPABASE_KEY detected"
 
 supabase: Client = create_client(url, key)
 

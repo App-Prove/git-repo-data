@@ -61,10 +61,12 @@ def get_sensitive_files(list_files: List[dict[str,str]]) -> dict[str, List[dict[
         return {"sensitiveFiles": []}
 
 
-def get_in_depth_file_analysis(list_files: List[dict[str,str]]) -> List[dict[str, str]]:
+def get_in_depth_file_analysis(list_files: List[dict[str,str]], audit_type: str = 'security') -> List[dict[str, str]]:
     """Asynchronously analyse each file with GPT to locate sensitive code
     For each file it returns a list of issues which are dict with keys:
     - lineNumber
+    - initialCode
+    - 
     - comment
     - suggestion
 
@@ -89,7 +91,7 @@ def get_in_depth_file_analysis(list_files: List[dict[str,str]]) -> List[dict[str
                 code = "".join([line for line in content if line is not None])
                 logger.info(f"Code to analyze : {code}")
                 in_depth_result = model.in_depth_analysis(
-                    code, str(file_data.get("language"))
+                    code, str(file_data.get("language")),audit_type
                 )
                 try:
                     # Try to format the data in json
