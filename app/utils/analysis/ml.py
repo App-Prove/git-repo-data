@@ -33,12 +33,15 @@ class ChatGPTApi:
                 "role": "system",
                 "content": (
                     f"You will be provided with a list of files paths"
-                    "Your task is to identify which files are most likely to contain sensitive code, base your expectations on the path of the file."
+                    "Your task is to identify which files are most likely to contain sensitive code,"
+                    "base your expectations on the path of the file."
+                    "understand that a main file is a file that is likely to contain the main logic of the application"
+                    "those types of files are usually the most sensitive ones."
+                    "remove all files which are irrelevent to the analysis"
+                    "sort paths from most sensitive to least sensitive"
                     "Output is formatted as JSON with key sensitiveFiles containing a list of objects with keys:"
                     "path, which is the path of the file containing sensitive code"
                     "language, which is the programming language of the file"
-                    "understand that a main file is a file that is likely to contain the main logic of the application"
-                    "those types of files are usually the most sensitive ones."
                 ),
             },
             {
@@ -56,27 +59,57 @@ class ChatGPTApi:
         ]
         return self.call(message=message)
 
-    def in_depth_analysis(self, code: str, language: str = "python") -> str:
+    def in_depth_analysis(
+        self, code: str, language: str = "python", audit_type: str = "security"
+    ) -> str:
         """Analyse code in depth using GPT"""
         if code is None or code == "":
             return ""
-        message = [
-            {
-                "role": "system",
-                "content": (
-                    f"You will be provided with a piece of {language} code"
-                    "Your task is to check code security."
-                    "If you find a possible security issue, you should provide a comment and a code suggestion to fix the issue (it must be code replacing existing one). "
-                    "Output is formatted as JSON with key issues containing a list of objects with keys:"
-                    "lineNumber, which is starting line where the issue occurs"
-                    "comment, which is a short description of the issue"
-                    "suggestion, which is a possible solution to the issue"
-                    "each entry of the list corresponds to a different issue in the code."
-                ),
-            },
+        if audit_type == "security":
+            message = [
+                {
+                    "role": "system",
+                    "content": (
+                        f"You will be provided with a piece of {language} code"
+                        "Your task is to check code security."
+                        "If you find a possible security issue, you should provide a comment and a code suggestion to fix the issue (it must be code replacing existing one). "
+                        "you should provide a comment and a code suggestion to fix the issue"
+                        "Output is formatted as JSON with key 'issues' containing a list "
+                        "each entry of the list corresponds to a different issue in the code"
+                        "formatted as JSON objects with keys:"
+                        f"language, which is always {language}"
+                        "lineNumber, which is starting line where the issue occurs"
+                        "initialCode, which is the code that is causing the issue ensure to include previous and next lines which are relevant"
+                        "solvingCode, which is a possible solution to the issue in code"
+                        "comment, which is a short description of the issue"
+                        "suggestion, which is a description of a possible solution to the issue"
+                    ),
+                },
+            ]
+        else:
+            message = [
+                {
+                    "role": "system",
+                    "content": (
+                        f"You will be provided with a piece of {language} code"
+                        "Your task is to check code reliability."
+                        "If you find an unhandeled error/exception," 
+                        "you should provide a comment and a code suggestion to fix the issue"
+                        "Output is formatted as JSON with key 'issues' containing a list "
+                        "each entry of the list corresponds to a different issue in the code"
+                        "formatted as JSON objects with keys:"
+                        "lineNumber, which is starting line where the issue occurs"
+                        "initialCode, which is the code that is causing the issue ensure to include previous and next lines which are relevant"
+                        "solvingCode, which is a possible solution to the issue in code"
+                        "comment, which is a short description of the issue"
+                        "suggestion, which is a description of a possible solution to the issue"
+                    ),
+                },
+            ]
+        message.append(
             {
                 "role": "user",
                 "content": code,
             },
-        ]
+        )
         return self.call(message=message)

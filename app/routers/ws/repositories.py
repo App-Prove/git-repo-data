@@ -35,7 +35,7 @@ router = APIRouter(
 from dotenv import load_dotenv
 
 load_dotenv()
-JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET",'')
+JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 
 
 html = """
@@ -113,17 +113,40 @@ async def ws_repository_analysis(websocket: WebSocket):
     # We should create a queue and start processes in threads to avoid blocking the event loop
     while True:
         data = await websocket.receive_json()
-        await websocket_api.send_pending(message="Connecting to service")
+        await websocket_api.send(
+            status="pending",
+            step_name="connecting",
+            message="Connecting to service",
+        )
         logger.debug(f"Received data : {data}")
         try:
             repository_url = data["repositoryURL"]
+            audit_type = data["auditType"]
+            await websocket_api.send(
+                status="success",
+                step_name="connecting",
+                message=f"Received repository URL: {repository_url}",
+            )
+            await websocket_api.send(
+                status="success",
+                step_name="connecting",
+                message=f"Received audit type: {audit_type}",
+            )
         except KeyError:
-            await websocket_api.send_error(message= "You should create an offer first")
+            await websocket_api.send(
+                status="error",
+                step_name="connecting",
+                message="You should create an offer first",
+            )
             continue
         try:
             token = data["token"]
         except KeyError:
-            await websocket_api.send_error(message= "You should authenticate first")
+            await websocket_api.send(
+                status="error",
+                step_name="connecting",
+                message="You should authenticate first",
+            )
             continue
         # Secure connection using supabase JWT token
         try:
@@ -135,26 +158,50 @@ async def ws_repository_analysis(websocket: WebSocket):
             user_id = payload.get("sub")
             # Check user_id correspond to the user who created the offer for selected repo
         except Exception as error:
-            await websocket_api.send_error(message= f"An error has occured while decoding the token : {error}")
+            await websocket_api.send(
+                status="error",
+                step_name="connecting",
+                message=f"An error has occured while decoding the token : {error}",
+            )
             continue
 
         # If we don't sleep, websocket is too fast and the client can't keep up
-        await websocket_api.send_success(message= f"Service ready for: {repository_url}")
+        await websocket_api.send(
+            status="success",
+            step_name="connecting",
+            message=f"Service ready for: {repository_url}",
+        )
 
         # Make sure URL is in the right format
         repository_url = format_github_url(repository_url)
 
         # Step 1: Clone the repository
-        await websocket_api.send_pending(message= "Started cloning repository")
+        await websocket_api.send(
+            status="pending",
+            step_name="cloning",
+            message="Started cloning repository",
+        )
         CLONE_DIR = Path(repository_url.split("/")[-1])
         try:
             analysis.clone_repo(repository_url, CLONE_DIR)
         except Exception as error:
-            await websocket_api.send_error(message= f"An error has occured while cloning the repository : {error}")
+            await websocket_api.send(
+                status="error",
+                step_name="cloning",
+                message=f"An error has occured while cloning the repository : {error}",
+            )
             continue
-        await websocket_api.send_success(message= f"Successfully cloned repository: {repository_url}")
+        await websocket_api.send(
+            step_name="cloning",
+            status="success",
+            message=f"Successfully cloned repository: {repository_url}",
+        )
 
-        await websocket_api.send_analyzing(message= "Started simple repository scan")
+        await websocket_api.send(
+            status="success",
+            step_name="identifying",
+            message="Started simple repository scan",
+        )
         # Step 2: Process the repository to count files, lines, identify main languages
         simple_repo_analysis = analysis.get_simple_repository_analysis(CLONE_DIR)
         (
@@ -169,37 +216,50 @@ async def ws_repository_analysis(websocket: WebSocket):
         logger.debug(
             f"Most common programming languages : {list_of_programming_languages}"
         )
-        await websocket_api.send_success(
-                message= "Repository scan complete",
-                type="repositoryScan",
-                data= {
-                    "numberOfFiles": number_of_files,
-                    "totalLineCount": total_line_count,
-                    "mostCommonProgrammingLanguages": list_of_programming_languages,
-                },
+        await websocket_api.send(
+            step_name="identifying",
+            status="success",
+            message="Repository scan complete",
+            type="repositoryScan",
+            data={
+                "numberOfFiles": number_of_files,
+                "totalLineCount": total_line_count,
+                "mostCommonProgrammingLanguages": list_of_programming_languages,
+            },
         )
 
-        await websocket_api.send_success(
-                 message= "Identified files relatives to project",
-                 type="relativeFiles",
-                data= {"relativeFiles":ready_for_analysis},
+        await websocket_api.send(
+            step_name="identifying",
+            status="success",
+            message="Identified files relatives to project",
+            type="relativeFiles",
+            data={"relativeFiles": ready_for_analysis},
         )
-        await websocket_api.send_analyzing(message= "Started in depth analysis")
+        await websocket_api.send(
+            status="success",
+            step_name='reviewing',
+            message="Started in depth analysis")
         # Step 3: Identify sensitive code (filter unnecessary files with AI)
         sensitive_files = analysis.get_sensitive_files(ready_for_analysis)
-        await websocket_api.send_success(
-                message= "Identified sensitive files for in depth analysis",
-                type="sensitiveFiles",
-                data= sensitive_files,
+        await websocket_api.send(
+            status="success",
+            step_name='reviewing',
+            message="Identified sensitive files for in depth analysis",
+            type="sensitiveFiles",
+            data=sensitive_files,
         )
         logger.debug(f"Files identified as relevent : {sensitive_files}")
 
         # Step 4: Identify changes in the code (check for security issues with AI, and suggest first solutions)
-        in_depth_file_analysis = analysis.get_in_depth_file_analysis(sensitive_files.get("sensitiveFiles",[]))
-        await websocket_api.send_success(
-                message="In depth analysis finished",
-                type="inDepthAnalysis",
-                data= in_depth_file_analysis,
+        in_depth_file_analysis = analysis.get_in_depth_file_analysis(
+            list_files=sensitive_files.get("sensitiveFiles", []), audit_type=audit_type
+        )
+        await websocket_api.send(
+            step_name="reviewing",
+            status="success",
+            message="In depth analysis finished",
+            type="inDepthAnalysis",
+            data=in_depth_file_analysis,
         )
 
         # Step 5: Store the data in supabase database
