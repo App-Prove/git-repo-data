@@ -118,7 +118,6 @@ async def ws_repository_analysis(websocket: WebSocket):
             step_name="connecting",
             message="Connecting to service",
         )
-        logger.debug(f"Received data : {data}")
         try:
             repository_url = data["repositoryURL"]
             audit_type = data["auditType"]

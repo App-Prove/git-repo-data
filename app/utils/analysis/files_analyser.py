@@ -143,14 +143,12 @@ def clean_dir(clone_dir):
 # Function to count lines in a file
 def count_lines(file_path):
     try:
-        with open(file_path, "rb") as file:
-            # TODO: Call GPT to identify not handled errors
-            raw_data = file.read()
-            result = chardet.detect(raw_data)
-            encoding = result["encoding"]
-            text = raw_data.decode(str(encoding))
-            lines = text.splitlines()
+        with open(file_path, "r", encoding="utf-8") as file:
+            lines = file.readlines()
             return len(lines)
+    except UnicodeDecodeError as e:
+        print(f"Decoding error for file {file_path}: {e}")
+        return 0
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
         return 0
