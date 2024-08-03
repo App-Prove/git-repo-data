@@ -114,23 +114,13 @@ async def ws_repository_analysis(websocket: WebSocket):
     while True:
         data = await websocket.receive_json()
         await websocket_api.send(
-            status="pending",
+            status="inProgress",
             step_name="connecting",
-            message="Connecting to service",
+            message="Connecting to our services",
         )
         try:
             repository_url = data["repositoryURL"]
             audit_type = data["auditType"]
-            await websocket_api.send(
-                status="success",
-                step_name="connecting",
-                message=f"Received repository URL: {repository_url}",
-            )
-            await websocket_api.send(
-                status="success",
-                step_name="connecting",
-                message=f"Received audit type: {audit_type}",
-            )
         except KeyError:
             await websocket_api.send(
                 status="error",
@@ -172,32 +162,32 @@ async def ws_repository_analysis(websocket: WebSocket):
         )
 
         # Make sure URL is in the right format
-        repository_url = format_github_url(repository_url)
+        formatted_repository_url = format_github_url(repository_url)
 
         # Step 1: Clone the repository
         await websocket_api.send(
-            status="pending",
+            status="inProgress",
             step_name="cloning",
             message="Started cloning repository",
         )
-        CLONE_DIR = Path(repository_url.split("/")[-1])
+        CLONE_DIR = Path(formatted_repository_url.split("/")[-1])
         try:
-            analysis.clone_repo(repository_url, CLONE_DIR)
+            analysis.clone_repo(formatted_repository_url, CLONE_DIR)
         except Exception as error:
             await websocket_api.send(
                 status="error",
                 step_name="cloning",
-                message=f"An error has occured while cloning the repository : {error}",
+                message=f"An error has occured while cloning",
             )
             continue
         await websocket_api.send(
             step_name="cloning",
             status="success",
-            message=f"Successfully cloned repository: {repository_url}",
+            message=f"Successfully cloned repository",
         )
 
         await websocket_api.send(
-            status="success",
+            status="inProgress",
             step_name="identifying",
             message="Started simple repository scan",
         )
@@ -217,7 +207,7 @@ async def ws_repository_analysis(websocket: WebSocket):
         )
         await websocket_api.send(
             step_name="identifying",
-            status="success",
+            status="inProgress",
             message="Repository scan complete",
             type="repositoryScan",
             data={
@@ -229,20 +219,18 @@ async def ws_repository_analysis(websocket: WebSocket):
 
         await websocket_api.send(
             step_name="identifying",
-            status="success",
+            status="inProgress",
             message="Identified files relatives to project",
             type="relativeFiles",
             data={"relativeFiles": ready_for_analysis},
         )
-        await websocket_api.send(
-            status="success",
-            step_name='reviewing',
-            message="Started in depth analysis")
+        
+
         # Step 3: Identify sensitive code (filter unnecessary files with AI)
         sensitive_files = analysis.get_sensitive_files(ready_for_analysis)
         await websocket_api.send(
             status="success",
-            step_name='reviewing',
+            step_name='identifying',
             message="Identified sensitive files for in depth analysis",
             type="sensitiveFiles",
             data=sensitive_files,

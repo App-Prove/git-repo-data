@@ -54,4 +54,4 @@ def read_root(git_url: str, background_tasks: BackgroundTasks):
     return {"message": "Processing repository in the background"}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info", reload=bool(os.getenv('DEV',False)), reload_dirs=["app"])
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info", reload=False, reload_dirs=["app"])

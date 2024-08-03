@@ -11,12 +11,12 @@ class WebSocketAPI:
 
     async def send(self, 
                    *,
-                   status: Literal['success','pending', 'analyzing','error'], 
+                   status: Literal['success','pending', 'inProgress','error'], 
                    message,
                    step_name:Literal['connecting','cloning','identifying','reviewing'],
                    type:Optional[Literal['relativeFiles','repositoryScan','sensitiveFiles','inDepthAnalysis']]=None,
                    data=None):
-        logger.debug(f"Sending success message: {message}")
+        logger.debug(f"Sending message: {message}")
         logger.debug(f"Type: {type}")
         logger.debug(f"Data: {data}")
         payload = {"time":datetime.datetime.now().isoformat(),"status": status, "message": message, "stepName": step_name}

@@ -1,8 +1,10 @@
 import json
 import os
 import logging
+from fastapi import WebSocket
 import pandas as pd
 import chardet
+from utils.websocket import WebSocketAPI
 
 from pathlib import Path
 from typing import List, Tuple, Dict
@@ -61,7 +63,7 @@ def get_sensitive_files(list_files: List[dict[str,str]]) -> dict[str, List[dict[
         return {"sensitiveFiles": []}
 
 
-def get_in_depth_file_analysis(list_files: List[dict[str,str]], audit_type: str = 'security') -> List[dict[str, str]]:
+def get_in_depth_file_analysis(*, list_files: List[dict[str,str]], audit_type: str = 'security',) -> List[dict[str, str]]:
     """Asynchronously analyse each file with GPT to locate sensitive code
     For each file it returns a list of issues which are dict with keys:
     - lineNumber
@@ -75,7 +77,7 @@ def get_in_depth_file_analysis(list_files: List[dict[str,str]], audit_type: str 
     in_depth_results = []
     # Limit the number of files to 5 for testing
     list_files = list_files[:5]
-    for file_data in list_files:
+    for (index,file_data) in enumerate(list_files):
         logger.error(file_data)
         file_path = str(file_data.get("path"))
         try:
