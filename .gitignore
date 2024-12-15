@@ -4,3 +4,6 @@ __pycache__
 test.ipynb
 .ipynb_checkpoints
 *.env
+*.db
+*.db-journal
+node_modules/

@@ -1,0 +1,57 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider             = "prisma-client-py"
+  interface           = "asyncio"
+  recursive_type_depth = 5
+}
+
+model User {
+  id        String     @id @default(cuid())
+  analyses  Analysis[]
+}
+
+model Analysis {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  userId        String    
+  user          User      @relation(fields: [userId], references: [id])
+  fileTree      FileTree?
+  issues        Issue[]
+  repoUrl       String?
+  repoName      String?
+  repoOwner     String?
+  repoBranch    String?
+  repoCommitSha String?
+  isPrivate     Boolean   @default(false)
+}
+
+model FileTree {
+  id         String     @id @default(cuid())
+  path       String?
+  name       String
+  type       String     // 'file' or 'directory'
+  content    String?    // For files
+  analysisId String     @unique
+  analysis   Analysis   @relation(fields: [analysisId], references: [id])
+  children   FileTree[] @relation("ParentChild")
+  parent     FileTree? @relation("ParentChild", fields: [parentId], references: [id])
+  parentId   String?
+}
+
+model Issue {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  severity    String
+  filePath    String?
+  lineNumber  Int?
+  analysisId  String
+  analysis    Analysis @relation(fields: [analysisId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+} 

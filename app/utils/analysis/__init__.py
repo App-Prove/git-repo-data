@@ -1,1 +1,0 @@
-from .files_analyser import *

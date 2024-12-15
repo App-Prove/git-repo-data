@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <style>
+        #messages { 
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Test Client</h1>
+    
+    <div>
+        <h3>Repository URL:</h3>
+        <input type="text" id="repoUrl" value="https://github.com/username/repo" style="width: 300px;">
+        <button onclick="connectWebSocket()">Connect</button>
+        <button onclick="disconnectWebSocket()">Disconnect</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+        let ws;
+
+        function connectWebSocket() {
+            const repoUrl = document.getElementById('repoUrl').value;
+            ws = new WebSocket('ws://localhost:8000/ws/analysis/analysis');
+            
+            ws.onopen = () => {
+                console.log('Connected');
+                ws.send(JSON.stringify({ repositoryURL: repoUrl }));
+            };
+
+            ws.onmessage = (event) => {
+                const messages = document.getElementById('messages');
+                const message = document.createElement('div');
+                message.className = 'message';
+                const data = JSON.parse(event.data);
+                message.innerHTML = `
+                    <strong>${data.step_name}</strong> (${data.status})<br>
+                    ${data.message}
+                    ${data.data ? '<pre>' + JSON.stringify(data.data, null, 2) + '</pre>' : ''}
+                `;
+                messages.appendChild(message);
+                messages.scrollTop = messages.scrollHeight;
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected');
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+        }
+    </script>
+</body>
+</html> 

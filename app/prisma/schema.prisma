@@ -1,0 +1,25 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider             = "prisma-client-py"
+  interface           = "asyncio"
+  recursive_type_depth = 5
+}
+
+model Analysis {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  repoUrl       String
+  repoName      String?
+  repoOwner     String?
+  repoBranch    String?
+  repoCommitSha String?
+  isPrivate     Boolean  @default(false)
+  userId        String?
+  status        String   @default("pending")
+  result        Json?    @default("{}")
+} 
